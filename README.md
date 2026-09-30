@@ -18,7 +18,7 @@ Proyek ini mengimplementasikan sistem **IoT berbasis ESP32-S3** yang mencakup:
 ```
 IoT-ESP32-Project/
 ├── README.md                  # Dokumentasi utama
-├── kelas-a/                   # Proyek Kelas A (Zhafran)
+├── kelas-a/                   # Proyek Kelas A (Zhafran & Lia)
 │   ├── README.md              # Dokumentasi lengkap Kelas A
 │   ├── Cargo.toml             # Konfigurasi project Rust
 │   ├── Cargo.lock             # Lock file dependencies
@@ -64,5 +64,5 @@ Lihat dokumentasi masing-masing kelas untuk petunjuk lebih detail:
 
 ## Kontributor
 
-- **Kelas A**: Zhafran
+- **Kelas A**: Zhafran & Lia
 - **Kelas C**: *(Akan ditambahkan)*

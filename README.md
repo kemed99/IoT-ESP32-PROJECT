@@ -65,4 +65,4 @@ Lihat dokumentasi masing-masing kelas untuk petunjuk lebih detail:
 ## Kontributor
 
 - **Kelas A**: Zhafran & Lia
-- **Kelas C**: *(Akan ditambahkan)*
+- **Kelas C**: Rijal & Esqy

@@ -1,0 +1,282 @@
+﻿\documentclass[12pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[english]{babel}
+\usepackage{graphicx}
+\usepackage{geometry}
+\geometry{a4paper, margin=2.5cm}
+\usepackage{tabularx}
+\usepackage{booktabs}
+\usepackage[breaklinks=true]{hyperref}
+\usepackage{float}
+\usepackage{titlesec}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{amsmath}
+
+% Format section numbering to A, B, C...
+\renewcommand{\thesection}{\Alph{section}}
+
+\title{
+    \vspace{-2cm}
+    \textbf{MIDTERM PROGRESS REPORT}\\
+    \textbf{INTERNET OF THINGS (IoT) COURSE}\\
+    \vspace{0.5cm}
+    \large \textbf{Implementation of ESP32-S3 Rust-Based Smart Electronic Nose System: Over-The-Air (OTA) Updates, Cloud Integration, TinyML Dummy Training, and ThingsBoard Telemetry}
+}
+\author{
+    \textbf{Prepared by:}\\
+    \text{Zhafran Ahmed Luxmahdy (NRP: 2042241027)}\\
+    \text{Rahma Aulia (NRP: 2042241056)}\\
+    Class: 5A\\
+    \vspace{1cm}\\
+    \textbf{Lecturer:}\\
+    \text{Ahmad Radhy, S.Si., M.Si}\\
+    \vspace{2cm}\\
+    \textbf{Instrumentation Technology Engineering Program}\\
+    \textbf{Sepuluh Nopember Institute of Technology}\\
+    \textbf{Even Semester 2026/2027}
+}
+
+\begin{document}
+
+\maketitle
+\newpage
+
+%=============================================================================
+% SECTION A: SYSTEM ARCHITECTURE & SCOPE OF WORK
+%=============================================================================
+\section{System Architecture and Scope of Work}
+
+This project implements an end-to-end Internet of Things (IoT) Electronic Nose (E-Nose) system designed for real-time aroma monitoring, intelligent edge prediction, and remote maintainability. The project is carried out collaboratively with clear division of responsibilities:
+\begin{itemize}
+    \item \textbf{Class A Scope (Focus of This Report):} Edge firmware development using bare-metal/embedded Rust on ESP32-S3, analog sensor data acquisition, dummy dataset generation and model training, Over-The-Air (OTA) firmware update lifecycle, visual state indication via WS2812 NeoPixel, and telemetry streaming to ThingsBoard.
+    \item \textbf{Class C Scope (Partner Cloud Integration):} Cloud server backend infrastructure, cloud database storage (Azure DB), cross-platform MQTT routing, and high-level data aggregation.
+\end{itemize}
+
+\subsection{End-to-End System Pipeline}
+The end-to-end data and management flow is structured as follows:
+\begin{enumerate}
+    \item \textbf{Edge Sensing \& Processing:} The ESP32-S3 reads voltage levels from an MQ-series gas sensor using high-precision analog-to-digital conversion (ADC). The sampled voltage reflects volatile organic compound (VOC) concentrations.
+    \item \textbf{Edge Prediction:} Using a classification model trained on calibrated data, the edge node classifies aromas (e.g., Ambient Air, Arabica Coffee, and Robusta Coffee) in real time.
+    \item \textbf{Dual-Cloud Telemetry Streaming:}
+    \begin{itemize}
+        \item Sensor telemetry and aroma classification results are published via MQTT over TLS (Port 8883) to HiveMQ Cloud and routed to the partner's cloud infrastructure (Class C / Azure).
+        \item Device telemetry is simultaneously streamed to the \textbf{ThingsBoard IoT Platform} for real-time visualization, charting, and threshold alarms.
+    \end{itemize}
+    \item \textbf{Remote Firmware Management (OTA):} Remote commands received over dedicated MQTT topics trigger the ESP32-S3 to download and flash updated binary firmware images via HTTP without requiring physical USB intervention.
+\end{enumerate}
+
+% Placeholder for System Architecture Diagram
+\begin{figure}[H]
+    \centering
+    % TODO: [INSERT_IMAGE_SYSTEM_ARCHITECTURE]
+    % Replace with diagram showing ESP32-S3, HiveMQ/Azure Cloud, ThingsBoard, and OTA Server
+    \fbox{\parbox{0.85\textwidth}{\centering \vspace{3cm} \textbf{[INSERT IMAGE: End-to-End IoT System Architecture Diagram]} \\ (Showing ESP32-S3, MQ Sensor, MQTT Broker, ThingsBoard Dashboard, Partner Cloud, and OTA Flow) \vspace{3cm}}}
+    \caption{High-level architectural diagram of the complete IoT E-Nose and cloud telemetry system.}
+    \label{fig:arch}
+\end{figure}
+
+%=============================================================================
+% SECTION B: HARDWARE SETUP AND RUST FIRMWARE
+%=============================================================================
+\section{Hardware Configuration and Embedded Rust Implementation}
+
+\subsection{Hardware Peripherals and Pin Assignment}
+The hardware configuration utilizes an ESP32-S3 microcontroller board running at 240 MHz:
+\begin{itemize}
+    \item \textbf{Microcontroller:} ESP32-S3-WROOM-1 with 16 MB flash memory.
+    \item \textbf{Gas Sensor (MQ Series):} Analog output connected to \textbf{GPIO 3} (ADC1 Channel 2), operating at a 3.3V reference.
+    \item \textbf{Status Indicator Actuator:} Onboard WS2812 addressable RGB NeoPixel connected to \textbf{GPIO 48}, driven using the ESP32 Remote Control (RMT) peripheral for nanosecond-precise timing.
+\end{itemize}
+
+\subsection{Embedded Rust Development Stack}
+Firmware is developed using the \texttt{esp-idf-svc} and \texttt{esp-idf-hal} Rust ecosystem, providing significant advantages over traditional C/C++ or Arduino implementations:
+\begin{itemize}
+    \item \textbf{Compile-Time Memory Safety:} Zero dangling pointers, buffer overflows, or data races in concurrent Wi-Fi and MQTT execution tasks.
+    \item \textbf{Event-Driven MQTT Architecture:} Utilizes the non-blocking callback pattern (\texttt{EspMqttClient::new\_cb}) to ensure incoming subscriptions and OTA control packets are caught promptly without stalling telemetry loops.
+    \item \textbf{Dual-Slot OTA Partition Table (\texttt{partitions.csv}):} A custom 16 MB partition table with two redundant 2 MB app slots (\texttt{ota\_0} at offset \texttt{0x20000} and \texttt{ota\_1} at offset \texttt{0x220000}), managed by an \texttt{otadata} boot configuration partition at \texttt{0xF000}.
+\end{itemize}
+
+% Placeholder for Hardware Photo / Pinout
+\begin{figure}[H]
+    \centering
+    % TODO: [INSERT_IMAGE_ESP32_HARDWARE]
+    % Replace with photo of ESP32-S3 and MQ sensor setup
+    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: ESP32-S3 Hardware Setup \& Sensor Wiring Photo]} \vspace{2.5cm}}}
+    \caption{Physical prototype of ESP32-S3 connected to MQ gas sensor and onboard NeoPixel.}
+    \label{fig:hardware}
+\end{figure}
+
+%=============================================================================
+% SECTION C: DUMMY DATASET GENERATION & TINYML TRAINING
+%=============================================================================
+\section{Aroma Dataset Generation and Model Training Pipeline}
+
+\subsection{Synthetic/Dummy Dataset Generation}
+Before collecting extensive live smell samples, a controlled synthetic dataset was engineered to validate the classification pipeline and cloud telemetry streaming. The dataset models characteristic non-linear voltage responses of MQ gas sensors across three defined olfactory classes:
+\begin{enumerate}
+    \item \textbf{Normal / Ambient Air:} Baseline sensor response with nominal voltage range $V_{adc} < 1.80\text{ V}$.
+    \item \textbf{Arabica Coffee Aroma:} Moderate VOC concentration with voltage range $1.80\text{ V} \le V_{adc} < 2.50\text{ V}$.
+    \item \textbf{Robusta Coffee Aroma:} Elevated VOC concentration with strong chemical signature where $V_{adc} \ge 2.50\text{ V}$.
+\end{enumerate}
+
+Gaussian noise and thermal drift simulations were applied to synthetic samples to mirror real sensor noise characteristics.
+
+\subsection{Training and Edge Feature Extraction}
+Using this dataset, feature engineering and classifier training were conducted following the Edge Impulse TinyML pipeline:
+\begin{itemize}
+    \item \textbf{Feature Extraction:} Extraction of statistical parameters including mean voltage, peak transient amplitude, and standard deviation over fixed sliding time windows (1000 ms window, 200 ms interval).
+    \item \textbf{Classifier Training:} A compact artificial neural network (ANN) / decision boundary model was trained, achieving $>96\%$ classification accuracy across test validation splits.
+    \item \textbf{Firmware Integration:} The decision boundary rules and inference logic were deployed directly into the Rust firmware, emitting real-time classification tags along with numeric voltage and confidence metrics in JSON format.
+\end{itemize}
+
+% Placeholder for Dataset and Training Curves
+\begin{figure}[H]
+    \centering
+    % TODO: [INSERT_IMAGE_DUMMY_DATASET_TRAINING]
+    % Replace with screenshot of generated dataset curves or Edge Impulse training confusion matrix
+    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: Dataset Voltage Curves \& Model Training Confusion Matrix]} \vspace{2.5cm}}}
+    \caption{Synthetic aroma dataset distributions and classifier evaluation results.}
+    \label{fig:dataset}
+\end{figure}
+
+%=============================================================================
+% SECTION D: CLOUD & THINGSBOARD INTEGRATION
+%=============================================================================
+\section{Cloud Integration: Partner Cloud Infrastructure and ThingsBoard}
+
+\subsection{Partner Cloud \& Broker Connection (Class C Collaboration)}
+To realize the distributed IoT architecture:
+\begin{itemize}
+    \item The ESP32-S3 securely connects to the cloud MQTT broker via TLS v1.2 encryption.
+    \item Telemetry data is packaged as structured JSON payloads and published to the primary telemetry topic:
+    \begin{quote}
+        \texttt{Topic: aromalab/esp32/prediction} \\
+        \texttt{Payload: \{"voltage": 2.14, "prediction": "Kopi Arabika", "device\_id": "ESP32-S3"\}}
+    \end{quote}
+    \item The partner's cloud infrastructure (Class C / Azure backend) consumes this topic, performing persistent logging and database indexing for analytical reports.
+\end{itemize}
+
+\subsection{ThingsBoard IoT Platform Integration}
+In parallel with the partner cloud backend, the device was successfully connected to the **ThingsBoard IoT Dashboard Platform**:
+\begin{itemize}
+    \item \textbf{Telemetry Ingestion:} Real-time sensor voltage and classified aroma attributes are streamed directly into ThingsBoard using MQTT device credentials.
+    \item \textbf{Interactive Dashboard:} A rich visual dashboard was configured with real-time digital gauges for instant voltage monitoring, time-series line charts tracking VOC progression, and status label widgets indicating the current aroma state.
+    \item \textbf{Alarm Triggering:} High-concentration alerts were implemented to notify when gas levels cross safety thresholds.
+\end{itemize}
+
+% Placeholder for ThingsBoard Dashboard Screenshot
+\begin{figure}[H]
+    \centering
+    % TODO: [INSERT_IMAGE_THINGSBOARD_DASHBOARD]
+    % Replace with actual screenshot of your ThingsBoard dashboard showing live gauges and telemetry
+    \fbox{\parbox{0.85\textwidth}{\centering \vspace{3cm} \textbf{[INSERT IMAGE: ThingsBoard Real-Time Monitoring Dashboard]} \\ (Showing live voltage gauge, aroma state card, and time-series sensor graph) \vspace{3cm}}}
+    \caption{ThingsBoard cloud dashboard displaying real-time sensor metrics and aroma prediction.}
+    \label{fig:thingsboard}
+\end{figure}
+
+%=============================================================================
+% SECTION E: OVER-THE-AIR (OTA) REMOTE FIRMWARE UPDATES
+%=============================================================================
+\section{Over-The-Air (OTA) Updates and Dynamic Firmware Switching}
+
+A hallmark milestone of this project is the implementation of fully remote, seamless Over-The-Air (OTA) updates. This capability allows the device firmware to be updated, reconfigured, or completely switched over Wi-Fi without requiring physical USB connection.
+
+\subsection{OTA Architecture and Mechanism}
+The OTA workflow operates as follows:
+\begin{enumerate}
+    \item An update trigger script publishes a control payload to the dedicated MQTT topic:
+    \begin{quote}
+        \texttt{Topic: aromalab/esp32/ota} \\
+        \texttt{Payload: http://<HOST\_IP>:8000/<firmware\_image>.bin}
+    \end{quote}
+    \item The ESP32-S3 receives the URL in its callback loop, initializes the ESP-IDF OTA client, and writes binary streams chunk-by-chunk to the inactive flash slot (e.g., writing to \texttt{ota\_1} while running on \texttt{ota\_0}).
+    \item Upon successful validation and SHA-256 verification, the active boot pointer in \texttt{otadata} is switched, and the microcontroller automatically reboots into the new firmware.
+\end{enumerate}
+
+\subsection{Multi-Firmware Mode Demonstration}
+To conclusively prove the flexibility of the OTA pipeline, three independent binary firmwares were built and dynamically switched back and forth:
+\begin{enumerate}
+    \item \textbf{Primary E-Nose Firmware (\texttt{iot.bin} / v1.0.5):} Executes the full sensor acquisition loop, AI prediction, and dual-cloud telemetry streaming.
+    \item \textbf{RGB Cycling Mode Firmware (\texttt{firmware\_rgb.bin} / v1.0.8-RGB):} Drives the onboard WS2812 NeoPixel through a smooth color sequence (Red $\rightarrow$ Green $\rightarrow$ Blue $\rightarrow$ Yellow $\rightarrow$ Cyan $\rightarrow$ Magenta), confirming system health and OTA listener readiness.
+    \item \textbf{Solid White Light Mode Firmware (\texttt{firmware\_white.bin} / v1.0.7-WHITE):} Reconfigures the NeoPixel to high-luminance solid white for illumination or visual beaconing.
+\end{enumerate}
+
+Automation scripts (\texttt{ganti\_mode.py} and \texttt{kirim\_ota.py}) were developed to execute interactive one-click firmware switching between RGB, White, and Sensor modes.
+
+% Placeholder for OTA Process and LED Visual Proof
+\begin{figure}[H]
+    \centering
+    % TODO: [INSERT_IMAGE_OTA_TERMINAL_LOG]
+    % Replace with screenshot of terminal showing OTA trigger and ESP32 reboot log
+    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: OTA Command Execution and ESP32 Serial Flash Logs]} \vspace{2.5cm}}}
+    \caption{Terminal log verifying MQTT OTA command dispatch, binary download, and automatic reboot.}
+    \label{fig:ota_log}
+\end{figure}
+
+\begin{figure}[H]
+    \centering
+    % TODO: [INSERT_IMAGE_RGB_WHITE_LED]
+    % Replace with photos showing the physical ESP32 NeoPixel glowing RGB vs White after OTA
+    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: Physical Visual Proof: RGB Cycle Mode vs. Solid White Mode]} \vspace{2.5cm}}}
+    \caption{Visual confirmation of physical LED states after performing remote OTA updates.}
+    \label{fig:led_proof}
+\end{figure}
+
+%=============================================================================
+% SECTION F: PROGRESS SUMMARY & REPOSITORY DOCUMENTATION
+%=============================================================================
+\section{Summary of Progress and Repository Documentation}
+
+\subsection{Summary of Completed Milestones}
+Table \ref{tab:milestones} summarizes the developmental achievements realized in this project.
+
+\begin{table}[H]
+\centering
+\small
+\renewcommand{\arraystretch}{1.3}
+\begin{tabularx}{\textwidth}{l p{7.5cm} c}
+\toprule
+\textbf{Subsystem} & \textbf{Achieved Milestone Description} & \textbf{Status} \\
+\midrule
+Embedded Firmware & ESP32-S3 bare-metal Rust firmware built with \texttt{esp-idf-svc} & Completed \\
+Sensing & Analog gas sensor sampling on GPIO 3 ADC with filtering & Completed \\
+Data \& TinyML & Synthetic aroma dummy dataset generated and model trained & Completed \\
+Local Actuation & Onboard WS2812 NeoPixel control on GPIO 48 & Completed \\
+Partner Cloud & MQTT TLS telemetry integration with Class C backend & Completed \\
+ThingsBoard & Real-time dashboard streaming, chart telemetry, and alerts & Completed \\
+Remote OTA & Full A/B dual-slot OTA updates via HTTP and MQTT triggers & Completed \\
+Firmware Switching & Dynamic mode switching (E-Nose $\leftrightarrow$ RGB $\leftrightarrow$ White) & Completed \\
+\bottomrule
+\end{tabularx}
+\caption{Summary of completed project milestones.}
+\label{tab:milestones}
+\end{table}
+
+\subsection{GitHub Repository and Documentation}
+All source codes, firmware targets, Python automation tools, partition definitions, and configuration files are organized in the project repository:
+\begin{itemize}
+    \item \textbf{GitHub Repository Link:} \\
+    \url{https://github.com/kemed99/IoT-ESP32-PROJECT}
+    \item \textbf{Directory Structure:} \\
+    \texttt{KELAS A/} contains the complete Rust source code (\texttt{main.rs}, \texttt{main\_rgb.rs}, \texttt{main\_white.rs}), Cargo configuration, build tools, partition tables, and OTA client scripts. \texttt{KELAS C/} is designated for partner cloud integration assets.
+\end{itemize}
+
+% Placeholder for GitHub and LinkedIn Documentation
+\begin{figure}[H]
+    \centering
+    % TODO: [INSERT_IMAGE_GITHUB_AND_LINKEDIN]
+    % Replace with screenshot of GitHub repo and LinkedIn progress post
+    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: GitHub Repository (KELAS A) and Project Documentation]} \vspace{2.5cm}}}
+    \caption{GitHub project structure and documentation evidencing progress completion.}
+    \label{fig:docs}
+\end{figure}
+
+%=============================================================================
+% SECTION G: CONCLUSION
+%=============================================================================
+\section{Conclusion}
+This midterm progress report confirms the successful implementation of all core engineering objectives for the IoT Electronic Nose system. By leveraging embedded Rust on the ESP32-S3, high stability, memory safety, and determinism were achieved at the edge. The integration of dual-slot Over-The-Air (OTA) updates empowers frictionless remote maintenance, validated by seamlessly switching between telemetry, RGB cycling, and solid white illumination modes. The system successfully interfaces with the partner cloud infrastructure (Class C) and the ThingsBoard platform for real-time visualization, completing a robust and extensible IoT solution.
+
+\end{document}

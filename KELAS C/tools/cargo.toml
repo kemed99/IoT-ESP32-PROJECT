@@ -1,0 +1,27 @@
+[package]
+name = "aromalab-dashboard"
+version = "0.1.0"
+edition = "2021"
+description = "Rust backend and monitoring dashboard for an Edge-AI coffee e-nose"
+
+[dependencies]
+axum = { version = "0.7", features = ["json"] }
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio-rustls", "sqlite"] }
+rumqttc = "0.24"
+dotenvy = "0.15"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4", features = ["serde"] }
+uuid = { version = "1", features = ["v4"] }
+anyhow = "1"
+base64 = "0.22"
+hmac = "0.12"
+sha2 = "0.10"
+urlencoding = "2"
+httpdate = "1"
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+
+tower-http = { version = "0.5", features = ["trace"] }

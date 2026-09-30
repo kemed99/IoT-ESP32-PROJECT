@@ -13,6 +13,9 @@
 \usepackage{array}
 \usepackage{enumitem}
 \usepackage{amsmath}
+\usepackage{tikz}
+\usetikzlibrary{shapes,arrows.meta,positioning,calc,fit,backgrounds,shadows.blur}
+\usepackage{grffile}
 
 % Format section numbering to A, B, C...
 \renewcommand{\thesection}{\Alph{section}}
@@ -48,9 +51,9 @@
 %=============================================================================
 \section{System Architecture and Scope of Work}
 
-This project implements an end-to-end Internet of Things (IoT) Electronic Nose (E-Nose) system designed for real-time aroma monitoring, intelligent edge prediction, and remote maintainability. The project is carried out collaboratively with clear division of responsibilities:
+This project implements an end-to-end Internet of Things (IoT) Electronic Nose (E-Nose) system designed for real-time aroma monitoring, intelligent edge prediction, and remote maintainability. The development is organized collaboratively with defined responsibilities:
 \begin{itemize}
-    \item \textbf{Class A Scope (Focus of This Report):} Edge firmware development using bare-metal/embedded Rust on ESP32-S3, analog sensor data acquisition, dummy dataset generation and model training, Over-The-Air (OTA) firmware update lifecycle, visual state indication via WS2812 NeoPixel, and telemetry streaming to ThingsBoard.
+    \item \textbf{Class A Scope (Focus of This Report):} Edge firmware development using embedded Rust on the ESP32-S3, analog sensor data acquisition, dummy dataset generation and model training, Over-The-Air (OTA) firmware update lifecycle, visual state indication via WS2812 NeoPixel, and telemetry streaming to ThingsBoard.
     \item \textbf{Class C Scope (Partner Cloud Integration):} Cloud server backend infrastructure, cloud database storage (Azure DB), cross-platform MQTT routing, and high-level data aggregation.
 \end{itemize}
 
@@ -67,13 +70,82 @@ The end-to-end data and management flow is structured as follows:
     \item \textbf{Remote Firmware Management (OTA):} Remote commands received over dedicated MQTT topics trigger the ESP32-S3 to download and flash updated binary firmware images via HTTP without requiring physical USB intervention.
 \end{enumerate}
 
-% Placeholder for System Architecture Diagram
+% Native TikZ Architecture Diagram
 \begin{figure}[H]
     \centering
-    % TODO: [INSERT_IMAGE_SYSTEM_ARCHITECTURE]
-    % Replace with diagram showing ESP32-S3, HiveMQ/Azure Cloud, ThingsBoard, and OTA Server
-    \fbox{\parbox{0.85\textwidth}{\centering \vspace{3cm} \textbf{[INSERT IMAGE: End-to-End IoT System Architecture Diagram]} \\ (Showing ESP32-S3, MQ Sensor, MQTT Broker, ThingsBoard Dashboard, Partner Cloud, and OTA Flow) \vspace{3cm}}}
-    \caption{High-level architectural diagram of the complete IoT E-Nose and cloud telemetry system.}
+    \begin{tikzpicture}[
+        font=\sffamily\footnotesize,
+        >=Latex,
+        node distance=0.8cm and 1.2cm,
+        box/.style={
+            draw=blue!70!black, 
+            line width=0.8pt, 
+            fill=blue!5!white, 
+            rounded corners=3pt, 
+            align=center, 
+            inner sep=6pt,
+            blur shadow={shadow blur steps=3, shadow blur extra rounding=3pt}
+        },
+        cloudbox/.style={
+            draw=teal!70!black, 
+            line width=0.8pt, 
+            fill=teal!5!white, 
+            rounded corners=3pt, 
+            align=center, 
+            inner sep=6pt,
+            blur shadow={shadow blur steps=3, shadow blur extra rounding=3pt}
+        },
+        otabox/.style={
+            draw=orange!80!black, 
+            line width=0.8pt, 
+            fill=orange!8!white, 
+            rounded corners=3pt, 
+            align=center, 
+            inner sep=6pt,
+            blur shadow={shadow blur steps=3, shadow blur extra rounding=3pt}
+        },
+        groupbox/.style={
+            draw=gray!50, 
+            dashed, 
+            line width=0.8pt, 
+            rounded corners=5pt, 
+            inner sep=10pt
+        }
+    ]
+        % Edge Device Layer
+        \node[box, fill=blue!15!white, font=\bfseries\sffamily] (esp) {ESP32-S3 Microcontroller\\(Embedded Rust / esp-idf-svc)};
+        \node[box, left=of esp, yshift=1.1cm] (sensor) {\textbf{MQ Gas Sensor}\\\scriptsize Analog Output (GPIO 3 ADC)};
+        \node[box, left=of esp, yshift=-1.1cm] (led) {\textbf{WS2812 NeoPixel}\\\scriptsize RGB Feedback (GPIO 48)};
+        
+        \node[box, below=0.6cm of esp, fill=blue!8!white] (partitions) {\textbf{Flash Memory Layout (16 MB)}\\\scriptsize ota\_0 (2MB) $\mid$ ota\_1 (2MB) $\mid$ otadata (8KB)};
+
+        % Grouping Edge Node
+        \begin{scope}[on background layer]
+            \node[groupbox, fit=(esp) (sensor) (led) (partitions), label={[blue!80!black, font=\bfseries\sffamily]above:EDGE HARDWARE \& FIRMWARE (Class A)}] (edgegroup) {};
+        \end{scope}
+
+        % Middleware / Broker Layer
+        \node[cloudbox, right=1.6cm of esp, yshift=1.4cm] (hivemq) {\textbf{HiveMQ Cloud Broker}\\\scriptsize MQTTS TLS (Port 8883)\\\scriptsize Topic: \texttt{aromalab/esp32/prediction}};
+        \node[otabox, right=1.6cm of esp, yshift=-1.4cm] (otaserver) {\textbf{Local Host / HTTP Server}\\\scriptsize Port 8000 (Firmware Binaries)\\\scriptsize Topic: \texttt{aromalab/esp32/ota}};
+
+        % Cloud Application Layer
+        \node[cloudbox, right=1.4cm of hivemq, yshift=1.1cm] (thingsboard) {\textbf{ThingsBoard Platform}\\\scriptsize Real-Time Dashboard\\\scriptsize Live Telemetry \& Gauges};
+        \node[cloudbox, right=1.4cm of hivemq, yshift=-1.1cm] (azure) {\textbf{Class C Partner Cloud}\\\scriptsize Backend Server \& Azure DB\\\scriptsize Cloud Analytics \& Storage};
+
+        % Connecting lines
+        \draw[->, thick, blue!80!black] (sensor) -- node[above, font=\tiny]{ADC mV} (esp.west |- sensor);
+        \draw[<-, thick, blue!80!black] (led) -- node[below, font=\tiny]{RMT/GPIO48} (esp.west |- led);
+        \draw[<->, dashed, thick, blue!60!black] (esp) -- (partitions);
+
+        \draw[->, thick, teal!80!black] (esp) -- node[above, sloped, font=\tiny]{MQTT JSON Telemetry} (hivemq);
+        \draw[->, thick, teal!80!black] (hivemq) -- (thingsboard);
+        \draw[->, thick, teal!80!black] (hivemq) -- (azure);
+
+        \draw[->, thick, orange!90!black] (otaserver) -- node[below, sloped, font=\tiny]{MQTT OTA Trigger} (esp);
+        \draw[<-, thick, orange!90!black] (esp) to[bend right=25] node[below, font=\tiny]{HTTP Firmware Stream (.bin)} (otaserver);
+
+    \end{tikzpicture}
+    \caption{End-to-end system architecture of the ESP32-S3 IoT E-Nose, showing dual-cloud connectivity, ThingsBoard dashboard, and Over-The-Air (OTA) maintenance flow.}
     \label{fig:arch}
 \end{figure}
 
@@ -98,13 +170,10 @@ Firmware is developed using the \texttt{esp-idf-svc} and \texttt{esp-idf-hal} Ru
     \item \textbf{Dual-Slot OTA Partition Table (\texttt{partitions.csv}):} A custom 16 MB partition table with two redundant 2 MB app slots (\texttt{ota\_0} at offset \texttt{0x20000} and \texttt{ota\_1} at offset \texttt{0x220000}), managed by an \texttt{otadata} boot configuration partition at \texttt{0xF000}.
 \end{itemize}
 
-% Placeholder for Hardware Photo / Pinout
 \begin{figure}[H]
     \centering
-    % TODO: [INSERT_IMAGE_ESP32_HARDWARE]
-    % Replace with photo of ESP32-S3 and MQ sensor setup
-    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: ESP32-S3 Hardware Setup \& Sensor Wiring Photo]} \vspace{2.5cm}}}
-    \caption{Physical prototype of ESP32-S3 connected to MQ gas sensor and onboard NeoPixel.}
+    \includegraphics[width=0.65\textwidth]{rgb.jpeg}
+    \caption{Hardware prototype: ESP32-S3 connected with wiring, sensor integration, and onboard WS2812 NeoPixel indicator active.}
     \label{fig:hardware}
 \end{figure}
 
@@ -127,17 +196,21 @@ Gaussian noise and thermal drift simulations were applied to synthetic samples t
 Using this dataset, feature engineering and classifier training were conducted following the Edge Impulse TinyML pipeline:
 \begin{itemize}
     \item \textbf{Feature Extraction:} Extraction of statistical parameters including mean voltage, peak transient amplitude, and standard deviation over fixed sliding time windows (1000 ms window, 200 ms interval).
-    \item \textbf{Classifier Training:} A compact artificial neural network (ANN) / decision boundary model was trained, achieving $>96\%$ classification accuracy across test validation splits.
+    \item \textbf{Classifier Training:} A compact artificial neural network (ANN) / decision boundary model was trained, achieving high classification accuracy across test validation splits.
     \item \textbf{Firmware Integration:} The decision boundary rules and inference logic were deployed directly into the Rust firmware, emitting real-time classification tags along with numeric voltage and confidence metrics in JSON format.
 \end{itemize}
 
-% Placeholder for Dataset and Training Curves
 \begin{figure}[H]
     \centering
-    % TODO: [INSERT_IMAGE_DUMMY_DATASET_TRAINING]
-    % Replace with screenshot of generated dataset curves or Edge Impulse training confusion matrix
-    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: Dataset Voltage Curves \& Model Training Confusion Matrix]} \vspace{2.5cm}}}
-    \caption{Synthetic aroma dataset distributions and classifier evaluation results.}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \IfFileExists{edge_impuls.png}{\includegraphics[width=\textwidth]{edge_impuls.png}}{\includegraphics[width=\textwidth]{"edge impuls.png"}}
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \IfFileExists{edge_impuls2.png}{\includegraphics[width=\textwidth]{edge_impuls2.png}}{\includegraphics[width=\textwidth]{"edge impuls2.png"}}
+    \end{minipage}
+    \caption{Edge Impulse TinyML platform: Data sampling distribution and classifier training results with synthetic aroma data.}
     \label{fig:dataset}
 \end{figure}
 
@@ -159,20 +232,17 @@ To realize the distributed IoT architecture:
 \end{itemize}
 
 \subsection{ThingsBoard IoT Platform Integration}
-In parallel with the partner cloud backend, the device was successfully connected to the **ThingsBoard IoT Dashboard Platform**:
+In parallel with the partner cloud backend, the device was successfully connected to the \textbf{ThingsBoard IoT Dashboard Platform}:
 \begin{itemize}
     \item \textbf{Telemetry Ingestion:} Real-time sensor voltage and classified aroma attributes are streamed directly into ThingsBoard using MQTT device credentials.
     \item \textbf{Interactive Dashboard:} A rich visual dashboard was configured with real-time digital gauges for instant voltage monitoring, time-series line charts tracking VOC progression, and status label widgets indicating the current aroma state.
     \item \textbf{Alarm Triggering:} High-concentration alerts were implemented to notify when gas levels cross safety thresholds.
 \end{itemize}
 
-% Placeholder for ThingsBoard Dashboard Screenshot
 \begin{figure}[H]
     \centering
-    % TODO: [INSERT_IMAGE_THINGSBOARD_DASHBOARD]
-    % Replace with actual screenshot of your ThingsBoard dashboard showing live gauges and telemetry
-    \fbox{\parbox{0.85\textwidth}{\centering \vspace{3cm} \textbf{[INSERT IMAGE: ThingsBoard Real-Time Monitoring Dashboard]} \\ (Showing live voltage gauge, aroma state card, and time-series sensor graph) \vspace{3cm}}}
-    \caption{ThingsBoard cloud dashboard displaying real-time sensor metrics and aroma prediction.}
+    \includegraphics[width=0.88\textwidth]{thingsboard.png}
+    \caption{ThingsBoard cloud dashboard displaying real-time sensor metrics, telemetry history, and aroma classification state.}
     \label{fig:thingsboard}
 \end{figure}
 
@@ -205,22 +275,26 @@ To conclusively prove the flexibility of the OTA pipeline, three independent bin
 
 Automation scripts (\texttt{ganti\_mode.py} and \texttt{kirim\_ota.py}) were developed to execute interactive one-click firmware switching between RGB, White, and Sensor modes.
 
-% Placeholder for OTA Process and LED Visual Proof
 \begin{figure}[H]
     \centering
-    % TODO: [INSERT_IMAGE_OTA_TERMINAL_LOG]
-    % Replace with screenshot of terminal showing OTA trigger and ESP32 reboot log
-    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: OTA Command Execution and ESP32 Serial Flash Logs]} \vspace{2.5cm}}}
-    \caption{Terminal log verifying MQTT OTA command dispatch, binary download, and automatic reboot.}
+    \includegraphics[width=0.85\textwidth]{ota.png}
+    \caption{Serial execution log verifying remote OTA trigger reception, binary download over HTTP, flash writing, and automatic partition reboot.}
     \label{fig:ota_log}
 \end{figure}
 
 \begin{figure}[H]
     \centering
-    % TODO: [INSERT_IMAGE_RGB_WHITE_LED]
-    % Replace with photos showing the physical ESP32 NeoPixel glowing RGB vs White after OTA
-    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: Physical Visual Proof: RGB Cycle Mode vs. Solid White Mode]} \vspace{2.5cm}}}
-    \caption{Visual confirmation of physical LED states after performing remote OTA updates.}
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{rgb.jpeg}
+        \small (a) RGB Rainbow Cycle Mode (\texttt{firmware\_rgb.bin})
+    \end{minipage}\hfill
+    \begin{minipage}{0.48\textwidth}
+        \centering
+        \includegraphics[width=\textwidth]{white.jpeg}
+        \small (b) Solid White LED Mode (\texttt{firmware\_white.bin})
+    \end{minipage}
+    \caption{Physical confirmation of onboard NeoPixel state transitions accomplished exclusively via remote Over-The-Air (OTA) firmware flashing.}
     \label{fig:led_proof}
 \end{figure}
 
@@ -263,13 +337,10 @@ All source codes, firmware targets, Python automation tools, partition definitio
     \texttt{KELAS A/} contains the complete Rust source code (\texttt{main.rs}, \texttt{main\_rgb.rs}, \texttt{main\_white.rs}), Cargo configuration, build tools, partition tables, and OTA client scripts. \texttt{KELAS C/} is designated for partner cloud integration assets.
 \end{itemize}
 
-% Placeholder for GitHub and LinkedIn Documentation
 \begin{figure}[H]
     \centering
-    % TODO: [INSERT_IMAGE_GITHUB_AND_LINKEDIN]
-    % Replace with screenshot of GitHub repo and LinkedIn progress post
-    \fbox{\parbox{0.85\textwidth}{\centering \vspace{2.5cm} \textbf{[INSERT IMAGE: GitHub Repository (KELAS A) and Project Documentation]} \vspace{2.5cm}}}
-    \caption{GitHub project structure and documentation evidencing progress completion.}
+    \includegraphics[width=0.88\textwidth]{github.png}
+    \caption{GitHub project repository structure (\texttt{KELAS A} and \texttt{KELAS C}) documenting open-source code and assets.}
     \label{fig:docs}
 \end{figure}
 
